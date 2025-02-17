@@ -139,36 +139,36 @@ struct RemindersListsView: View {
     func fetch(_ client: SupabaseClient) async throws -> Value {
       let now = Date()
 
-      let todayCount =
-        try await client.from(Reminder.databaseTableName)
+      async let todayCount =
+        client.from(Reminder.databaseTableName)
         .select(head: true, count: .exact)
         .gte("date", value: now)
         .lte("date", value: now)
         .execute().count ?? 0
 
-      let allCount =
-        try await client.from(Reminder.databaseTableName)
+      async let allCount =
+        client.from(Reminder.databaseTableName)
         .select(head: true, count: .exact).execute().count ?? 0
 
-      let scheduledCount =
-        try await client.from(Reminder.databaseTableName)
+      async let scheduledCount =
+        client.from(Reminder.databaseTableName)
         .select(head: true, count: .exact)
         .gt("date", value: now)
         .execute().count ?? 0
 
-      let flaggedCount =
-        try await client.from(Reminder.databaseTableName)
+      async let flaggedCount =
+        client.from(Reminder.databaseTableName)
         .select(head: true, count: .exact)
         .is("is_flagged", value: true)
         .execute().count ?? 0
 
-      let completedCount =
-        try await client.from(Reminder.databaseTableName)
+      async let completedCount =
+        client.from(Reminder.databaseTableName)
         .select(head: true, count: .exact)
         .is("is_completed", value: true)
         .execute().count ?? 0
 
-      return Value(
+      return try await Value(
         allCount: allCount,
         completedCount: completedCount,
         flaggedCount: flaggedCount,
