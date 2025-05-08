@@ -1,17 +1,19 @@
+import CryptoKit
 import Dependencies
+import Foundation
 import Sharing
 import Supabase
 
 public protocol SupabaseKeyRequest<Value>: Hashable, Sendable {
   associatedtype Value
 
-  var tables: [String] { get }
+  var observeTables: [String] { get }
 
   func fetch(_ client: SupabaseClient) async throws -> Value
 }
 
 public struct FetchAll<Value: Decodable & Sendable>: SupabaseKeyRequest {
-  public var tables: [String]
+  public var observeTables: [String]
   public var filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)?
 
   public func hash(into hasher: inout Hasher) {
@@ -26,16 +28,16 @@ public struct FetchAll<Value: Decodable & Sendable>: SupabaseKeyRequest {
     _ table: String,
     filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)? = nil
   ) {
-    self.tables = [table]
+    self.observeTables = [table]
     self.filter = filter
   }
 
   public func fetch(_ client: SupabaseClient) async throws -> Value {
     if let filter {
-      return try await filter(client.from(tables[0]).select()).execute().value
+      return try await filter(client.from(observeTables[0]).select()).execute().value
     }
 
-    return try await client.from(tables[0]).select().execute().value
+    return try await client.from(observeTables[0]).select().execute().value
   }
 }
 
@@ -49,6 +51,12 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
   let client: SupabaseClient
   let request: any SupabaseKeyRequest<Value>
 
+  private var topic: String {
+    let id = "\(id.hashValue)"
+    let hash = Insecure.MD5.hash(data: Data(id.utf8)).map { String(format: "%02hhx", $0) }.joined()
+    return "sharing:supabase:\(hash)"
+  }
+
   public init(
     request: some SupabaseKeyRequest<Value>,
     client: SupabaseClient? = nil
@@ -59,7 +67,8 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
   }
 
   public func load(
-    context: Sharing.LoadContext<Value>, continuation: Sharing.LoadContinuation<Value>
+    context: Sharing.LoadContext<Value>,
+    continuation: Sharing.LoadContinuation<Value>
   ) {
     Task {
       do {
@@ -72,33 +81,47 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
   }
 
   public func subscribe(
-    context: Sharing.LoadContext<Value>, subscriber: Sharing.SharedSubscriber<Value>
+    context: Sharing.LoadContext<Value>,
+    subscriber: Sharing.SharedSubscriber<Value>
   ) -> Sharing.SharedSubscription {
 
-    var subscriptions = Set<RealtimeSubscription>()
+    var tasks: [Task<Void, Never>] = []
 
-    for table in request.tables {
-      let channel = client.channel("sharing:supabase:\(table)")
+    let channel = client.channel(topic)
 
-      channel.onPostgresChange(AnyAction.self, table: table) { _ in
+    for table in request.observeTables {
+      let stream = channel.postgresChange(AnyAction.self, table: table)
+
+      tasks.append(
         Task {
-          do {
-            let response = try await request.fetch(client)
-            subscriber.yield(response)
-          } catch {
-            subscriber.yield(throwing: error)
+          for await _ in stream {
+            if Task.isCancelled {
+              break
+            }
+
+            do {
+              let response = try await request.fetch(client)
+              subscriber.yield(response)
+            } catch {
+              subscriber.yield(throwing: error)
+            }
           }
         }
-      }
-      .store(in: &subscriptions)
-
-      Task {
-        await channel.subscribe()
-      }
+      )
     }
 
-    return SharedSubscription { [subscriptions] in
-      subscriptions.forEach { $0.cancel() }
+    Task {
+      await channel.subscribe()
+    }
+
+    return SharedSubscription { [tasks] in
+      for task in tasks {
+        task.cancel()
+      }
+
+      Task {
+        await channel.unsubscribe()
+      }
     }
   }
 

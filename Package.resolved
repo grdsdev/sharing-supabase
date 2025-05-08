@@ -1,5 +1,5 @@
 {
-  "originHash" : "83516487cf59cbc1da5b3dfbdac56bef3e31c059a03014fa7e9fec534c6e8ca3",
+  "originHash" : "0c48e24c24c53fd545c1c5f1cb1b3e687ff49dca0de79b451b4edfb4458b23b3",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "5928286acce13def418ec36d05a001a9641086f2",
         "version" : "1.0.3"
-      }
-    },
-    {
-      "identity" : "naivedate",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/CreateAPI/NaiveDate",
-      "state" : {
-        "revision" : "a51026971f3819a7d034b52ecb9404d719c04482",
-        "version" : "1.1.0"
       }
     },
     {
@@ -35,15 +26,6 @@
       "state" : {
         "revision" : "ae33e5941bb88d88538d0a6b19ca0b01e6c76dcf",
         "version" : "1.3.1"
-      }
-    },
-    {
-      "identity" : "swift-case-paths",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-case-paths",
-      "state" : {
-        "revision" : "19b7263bacb9751f151ec0c93ec816fe1ef67c7b",
-        "version" : "1.6.1"
       }
     },
     {
@@ -116,15 +98,6 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
-      }
-    },
-    {
-      "identity" : "swift-navigation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-navigation",
-      "state" : {
-        "revision" : "e28911721538fa0c2439e92320bad13e3200866f",
-        "version" : "2.2.3"
       }
     },
     {
