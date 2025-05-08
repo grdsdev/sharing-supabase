@@ -105,7 +105,7 @@ struct RemindersListsView: View {
   }
 
   private struct RemindersLists: SupabaseKeyRequest {
-    var tables: [String] {
+    var observeTables: [String] {
       [
         Reminders.RemindersList.databaseTableName,
         Reminders.Reminder.databaseTableName,
@@ -134,7 +134,7 @@ struct RemindersListsView: View {
     }
   }
   private struct Stats: SupabaseKeyRequest {
-    var tables: [String] { ["reminders"] }
+    var observeTables: [String] { ["reminders"] }
 
     func fetch(_ client: SupabaseClient) async throws -> Value {
       let now = Date()

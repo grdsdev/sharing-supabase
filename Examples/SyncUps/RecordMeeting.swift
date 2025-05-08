@@ -2,6 +2,7 @@ import Dependencies
 import Sharing
 import Speech
 import SwiftUI
+import Supabase
 import SwiftUINavigation
 
 @MainActor
@@ -16,10 +17,11 @@ final class RecordMeetingModel: HashableObject {
   private var transcript = ""
 
   @ObservationIgnored @Dependency(\.continuousClock) var clock
-  @ObservationIgnored @Dependency(\.defaultDatabase) var database
+  @ObservationIgnored @Dependency(\.defaultSupabaseClient) var supabase
   @ObservationIgnored @Dependency(\.date.now) var now
   @ObservationIgnored @Dependency(\.soundEffectClient) var soundEffectClient
   @ObservationIgnored @Dependency(\.speechClient) var speechClient
+  @ObservationIgnored @Dependency(\.uuid) var uuid
 
   enum AlertAction {
     case confirmSave
@@ -122,11 +124,10 @@ final class RecordMeetingModel: HashableObject {
     isDismissed = true
 
     try? await clock.sleep(for: .seconds(0.4))
-    await withErrorReporting {
-      try await database.write { [now, syncUp, transcript] db in
-        _ = try Meeting(date: now, syncUpID: syncUp.id!, transcript: transcript)
-          .inserted(db)
-      }
+    _ = await withErrorReporting {
+      try await supabase.from(Meeting.tableName)
+        .insert(Meeting(id: uuid(), date: now, syncUpID: syncUp.id, transcript: transcript))
+        .execute()
     }
   }
 }
@@ -372,13 +373,14 @@ struct MeetingFooterView: View {
 
 #Preview {
   NavigationStack {
+    let id = UUID()
     RecordMeetingView(
       model: RecordMeetingModel(
-        syncUp: SyncUp(id: 1, seconds: 60, theme: .bubblegum, title: "Engineering"),
+        syncUp: SyncUp(id: id, seconds: 60, theme: .bubblegum, title: "Engineering"),
         attendees: [
-          Attendee(name: "Blob", syncUpID: 1),
-          Attendee(name: "Blob Jr", syncUpID: 1),
-          Attendee(name: "Blob Sr", syncUpID: 1),
+          Attendee(id: UUID(), name: "Blob", syncUpID: id),
+          Attendee(id: UUID(), name: "Blob Jr", syncUpID: id),
+          Attendee(id: UUID(), name: "Blob Sr", syncUpID: id),
         ]
       )
     )

@@ -64,7 +64,7 @@ struct ReminderTag: Codable {
 extension SupabaseClient {
   static var shared: SupabaseClient {
     SupabaseClient(
-      supabaseURL: URL(string: "http://127.0.0.1:54321")!,
+      supabaseURL: URL(string: "http://proxyman.debug:54321")!,
       supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
       options: SupabaseClientOptions(global: .init(logger: ConsoleLog()))
     )

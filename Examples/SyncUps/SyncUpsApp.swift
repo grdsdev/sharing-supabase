@@ -1,4 +1,4 @@
-import SharingGRDB
+import SharingSupabase
 import SwiftUI
 
 @main
@@ -7,7 +7,7 @@ struct SyncUpsApp: App {
 
   init() {
     prepareDependencies {
-      $0.defaultDatabase = .appDatabase
+      $0.defaultSupabaseClient = .shared
     }
   }
 

@@ -105,7 +105,7 @@ struct SearchRemindersView: View {
     let showCompletedInSearchResults: Bool
     let searchText: String
 
-    var tables: [String] { ["reminders", "reminders_lists", "tags"] }
+    var observeTables: [String] { ["reminders", "reminders_lists", "tags"] }
 
     func fetch(_ client: SupabaseClient) async throws -> Value {
       Value()

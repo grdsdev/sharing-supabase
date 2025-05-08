@@ -1,4 +1,4 @@
-import SharingGRDB
+import SharingSupabase
 import SwiftUI
 import SwiftUINavigation
 
@@ -12,7 +12,7 @@ final class SyncUpDetailModel: HashableObject {
   var onMeetingStarted: (SyncUp, [Attendee]) -> Void = unimplemented("onMeetingStarted")
 
   @ObservationIgnored @Dependency(\.continuousClock) var clock
-  @ObservationIgnored @Dependency(\.defaultDatabase) var database
+  @ObservationIgnored @Dependency(\.defaultSupabaseClient) var supabase
   @ObservationIgnored @Dependency(\.openSettings) var openSettings
   @ObservationIgnored @Dependency(\.speechClient.authorizationStatus) var authorizationStatus
   @ObservationIgnored @Dependency(\.uuid) var uuid
@@ -35,15 +35,16 @@ final class SyncUpDetailModel: HashableObject {
     self.destination = destination
     _details = SharedReader(
       wrappedValue: Details.Value(syncUp: syncUp),
-      .fetch(Details(syncUp: syncUp), animation: .default)
+      .supabase(Details(syncUp: syncUp))
     )
   }
 
-  func deleteMeetings(atOffsets indices: IndexSet) {
-    withErrorReporting {
-      try database.write { db in
-        _ = try Meeting.deleteAll(db, keys: indices.map { details.meetings[$0].id })
-      }
+  func deleteMeetings(atOffsets indices: IndexSet) async {
+    _ = await withErrorReporting {
+      try await supabase.from(Meeting.tableName)
+        .delete()
+        .in("id", values: indices.compactMap { details.meetings[$0].id })
+        .execute()
     }
   }
 
@@ -56,10 +57,10 @@ final class SyncUpDetailModel: HashableObject {
     case .confirmDeletion:
       isDismissed = true
       try? await clock.sleep(for: .seconds(0.4))
-      await withErrorReporting {
-        try await database.write { [syncUp = details.syncUp] db in
-          _ = try syncUp.delete(db)
-        }
+      _ = await withErrorReporting {
+        try await supabase.from(SyncUp.tableName).delete()
+          .eq("id", value: details.syncUp.id)
+          .execute()
       }
 
     case .continueWithoutRecording:
@@ -97,7 +98,7 @@ final class SyncUpDetailModel: HashableObject {
     }
   }
 
-  struct Details: FetchKeyRequest {
+  struct Details: SupabaseKeyRequest {
     struct Value {
       var attendees: [Attendee] = []
       var meetings: [Meeting] = []
@@ -106,14 +107,38 @@ final class SyncUpDetailModel: HashableObject {
 
     let syncUp: SyncUp
 
-    func fetch(_ db: Database) throws -> Value {
-      try Value(
-        attendees: Attendee.filter(Column("syncUpID") == syncUp.id).fetchAll(db),
-        meetings: Meeting
-          .filter(Column("syncUpID") == syncUp.id)
-          .order(Column("date").desc)
-          .fetchAll(db),
-        syncUp: SyncUp.fetchOne(db, key: syncUp.id) ?? SyncUp()
+    var observeTables: [String] {
+      [
+        Attendee.tableName, Meeting.tableName, SyncUp.tableName,
+      ]
+    }
+
+    func fetch(_ client: SupabaseClient) async throws -> Value {
+      async let attendees =
+        client.from(Attendee.tableName)
+        .select()
+        .eq("syncup_id", value: syncUp.id)
+        .execute().value as [Attendee]
+
+      async let meetings =
+        client.from(Meeting.tableName)
+        .select()
+        .eq("syncup_id", value: syncUp.id)
+        .order("date", ascending: false)
+        .execute().value as [Meeting]
+
+      async let syncUp =
+        client.from(SyncUp.tableName)
+        .select()
+        .eq("id", value: syncUp.id)
+        .single()
+        .execute()
+        .value as SyncUp
+
+      return try await Value(
+        attendees: attendees,
+        meetings: meetings,
+        syncUp: syncUp
       )
     }
   }
@@ -155,7 +180,9 @@ struct SyncUpDetailView: View {
       if !model.details.meetings.isEmpty {
         Section {
           ForEach(model.details.meetings, id: \.id) { meeting in
-            NavigationLink(value: AppModel.Path.meeting(meeting, attendees: model.details.attendees)) {
+            NavigationLink(
+              value: AppModel.Path.meeting(meeting, attendees: model.details.attendees)
+            ) {
               HStack {
                 Image(systemName: "calendar")
                 Text(meeting.date, style: .date)
@@ -164,7 +191,9 @@ struct SyncUpDetailView: View {
             }
           }
           .onDelete { indices in
-            model.deleteMeetings(atOffsets: indices)
+            Task {
+              await model.deleteMeetings(atOffsets: indices)
+            }
           }
         } header: {
           Text("Past meetings")
@@ -287,19 +316,19 @@ struct MeetingView: View {
   }
 }
 
-#Preview {
-  let _ = prepareDependencies {
-    $0.defaultDatabase = .appDatabase
-  }
-  @Dependency(\.defaultDatabase) var database
-  let syncUp = try! database.read { db in
-    try SyncUp.fetchOne(db)!
-  }
-  NavigationStack {
-    SyncUpDetailView(
-      model: SyncUpDetailModel(
-        syncUp: syncUp
-      )
-    )
-  }
-}
+//#Preview {
+//  let _ = prepareDependencies {
+//    $0.defaultDatabase = .appDatabase
+//  }
+//  @Dependency(\.defaultDatabase) var database
+//  let syncUp = try! database.read { db in
+//    try SyncUp.fetchOne(db)!
+//  }
+//  NavigationStack {
+//    SyncUpDetailView(
+//      model: SyncUpDetailModel(
+//        syncUp: syncUp
+//      )
+//    )
+//  }
+//}

@@ -1,5 +1,5 @@
-import Sharing
 import NaiveDate
+import Sharing
 import SharingSupabase
 import SwiftUI
 
@@ -139,13 +139,14 @@ struct RemindersListDetailView: View {
     let ordering: Ordering
     let showCompleted: Bool
 
-    var tables: [String] {
+    var observeTables: [String] {
       ["reminders", "reminders_tags", "tags"]
     }
 
     func fetch(_ client: SupabaseClient) async throws -> [Record] {
       // Fetch reminders
-      var remindersQuery = client
+      var remindersQuery =
+        client
         .from("reminders")
         .select()
         .eq("list_id", value: listID)
@@ -157,14 +158,16 @@ struct RemindersListDetailView: View {
       let reminders =
         try await remindersQuery
         .order("is_completed", ascending: true)
-//        .order(ordering)
+        //        .order(ordering)
         .execute().value as [Reminder]
 
       // Fetch tags for each reminder
       var records = [Record]()
 
       for reminder in reminders {
-        let tags = try await client
+        // TODO: need to reach for reminders_tags for fetching tags.
+        let tags =
+          try await client
           .from("tags")
           .select("name")
           .eq("reminder_id", value: reminder.id)
@@ -172,7 +175,10 @@ struct RemindersListDetailView: View {
 
         let commaSeparatedTags = tags.map { $0.name }.joined(separator: ",")
 
-        let isPastDue = !reminder.isCompleted && (reminder.date ?? Calendar.current.naiveDate(from: .now)) < Calendar.current.naiveDate(from: .now)
+        let isPastDue =
+          !reminder.isCompleted
+          && (reminder.date ?? Calendar.current.naiveDate(from: .now))
+            < Calendar.current.naiveDate(from: .now)
 
         let record = Record(
           reminder: reminder,

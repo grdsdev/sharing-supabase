@@ -1,8 +1,9 @@
 import Dependencies
-import SharingGRDB
+import SharingSupabase
 import SwiftUI
 import SwiftUINavigation
 
+@MainActor
 @Observable
 final class SyncUpFormModel: Identifiable {
   var attendees: [AttendeeDraft] = []
@@ -10,7 +11,7 @@ final class SyncUpFormModel: Identifiable {
   var isDismissed = false
   var syncUp: SyncUp
 
-  @ObservationIgnored @Dependency(\.defaultDatabase) var database
+  @ObservationIgnored @Dependency(\.defaultSupabaseClient) var supabase
   @ObservationIgnored @Dependency(\.uuid) var uuid
 
   struct AttendeeDraft: Identifiable {
@@ -57,19 +58,37 @@ final class SyncUpFormModel: Identifiable {
     isDismissed = true
   }
 
-  func saveButtonTapped() {
+  func saveButtonTapped() async {
     attendees.removeAll { attendee in
       attendee.name.allSatisfy(\.isWhitespace)
     }
     if attendees.isEmpty {
       attendees.append(SyncUpFormModel.AttendeeDraft(id: uuid()))
     }
-    withErrorReporting {
-      try database.write { db in
-        try syncUp.save(db)
-        try Attendee.filter(Column("syncUpID") == syncUp.id!).deleteAll(db)
-        for attendee in attendees {
-          _ = try Attendee(name: attendee.name, syncUpID: syncUp.id!).inserted(db)
+    await withErrorReporting {
+      try await supabase.from(SyncUp.tableName)
+        .upsert(syncUp)
+        .eq("id", value: syncUp.id)
+        .execute()
+
+      try await withThrowingDiscardingTaskGroup { [supabase, syncUp, attendees] group in
+        group.addTask {
+          try await supabase.from(Attendee.tableName)
+            .delete()
+            .eq("syncup_id", value: syncUp.id)
+            .execute()
+        }
+
+        group.addTask {
+          try await supabase.from(Attendee.tableName)
+            .insert(attendees.map {
+              AnyJSON.object([
+                "id": .string($0.id.uuidString),
+                "name": .string($0.name),
+                "syncup_id": .string(syncUp.id.uuidString)
+              ])
+            })
+            .execute()
         }
       }
     }
@@ -126,7 +145,9 @@ struct SyncUpFormView: View {
       }
       ToolbarItem(placement: .confirmationAction) {
         Button("Save") {
-          model.saveButtonTapped()
+          Task {
+            await model.saveButtonTapped()
+          }
         }
       }
     }
@@ -164,7 +185,7 @@ extension Duration {
   NavigationStack {
     SyncUpFormView(
       model: SyncUpFormModel(
-        syncUp: SyncUp()
+        syncUp: SyncUp(id: UUID())
       )
     )
   }

@@ -1,5 +1,5 @@
 import CasePaths
-import SharingGRDB
+import SharingSupabase
 import SwiftUI
 
 @MainActor
@@ -78,9 +78,9 @@ struct AppView: View {
   }
 }
 
-#Preview("Happy path") {
-  let _ = prepareDependencies {
-    $0.defaultDatabase = .appDatabase
-  }
-  AppView(model: AppModel())
-}
+//#Preview("Happy path") {
+//  let _ = prepareDependencies {
+//    $0.defaultDatabase = .appDatabase
+//  }
+//  AppView(model: AppModel())
+//}
