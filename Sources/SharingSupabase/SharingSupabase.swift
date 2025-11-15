@@ -4,16 +4,11 @@ import Foundation
 import Sharing
 import Supabase
 
-public protocol SupabaseKeyRequest<Value>: Hashable, Sendable {
-  associatedtype Value
-
-  var observeTables: [String] { get }
-
-  func fetch(_ client: SupabaseClient) async throws -> Value
-}
-
-public struct FetchAll<Value: Decodable & Sendable>: SupabaseKeyRequest {
-  public var observeTables: [String]
+public struct FetchAll<Value: Decodable>: SupabaseKeyRequest {
+  public var configuration: SupabaseKeyRequestConfiguration {
+    SupabaseKeyRequestConfiguration(observeTables: [table])
+  }
+  public let table: String
   public var filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)?
 
   public func hash(into hasher: inout Hasher) {
@@ -28,20 +23,20 @@ public struct FetchAll<Value: Decodable & Sendable>: SupabaseKeyRequest {
     _ table: String,
     filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)? = nil
   ) {
-    self.observeTables = [table]
+    self.table = table
     self.filter = filter
   }
 
   public func fetch(_ client: SupabaseClient) async throws -> Value {
     if let filter {
-      return try await filter(client.from(observeTables[0]).select()).execute().value
+      return try await filter(client.from(table).select()).execute().value
     }
 
-    return try await client.from(observeTables[0]).select().execute().value
+    return try await client.from(table).select().execute().value
   }
 }
 
-public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
+public struct SupabaseFetchKey<Value>: SharedReaderKey {
   public typealias ID = FetchKeyID
 
   public var id: ID {
@@ -70,6 +65,11 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
     context: Sharing.LoadContext<Value>,
     continuation: Sharing.LoadContinuation<Value>
   ) {
+    guard case .userInitiated = context else {
+      continuation.resumeReturningInitialValue()
+      return
+    }
+
     Task {
       do {
         let response = try await request.fetch(client)
@@ -84,12 +84,11 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
     context: Sharing.LoadContext<Value>,
     subscriber: Sharing.SharedSubscriber<Value>
   ) -> Sharing.SharedSubscription {
-
     var tasks: [Task<Void, Never>] = []
 
     let channel = client.channel(topic)
 
-    for table in request.observeTables {
+    for table in request.configuration.observeTables {
       let stream = channel.postgresChange(AnyAction.self, table: table)
 
       tasks.append(
@@ -111,7 +110,7 @@ public struct SupabaseFetchKey<Value: Sendable>: SharedReaderKey {
     }
 
     Task {
-      await channel.subscribe()
+      try? await channel.subscribeWithError()
     }
 
     return SharedSubscription { [tasks] in
@@ -136,14 +135,14 @@ extension SharedReaderKey {
   ///   - client: The Supabase client to use. If `nil`, the default client will be used.
   ///
   /// - Returns: A new `SupabaseFetchKey`.
-  public static func supabase<Value: Sendable>(
+  public static func supabase<Value>(
     _ request: some SupabaseKeyRequest<Value>,
     client: SupabaseClient? = nil
   ) -> SupabaseFetchKey<Value> where Self == SupabaseFetchKey<Value> {
     SupabaseFetchKey(request: request, client: client)
   }
 
-  public static func supabase<Record: Decodable & Sendable>(
+  public static func supabase<Record: Decodable>(
     _ table: String,
     filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)? = nil,
     client: SupabaseClient? = nil
