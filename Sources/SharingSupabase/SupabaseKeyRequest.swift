@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 12/05/25.
 //
 
-public struct SupabaseKeyRequestConfiguration {
+public struct SupabaseKeyRequestConfiguration: Hashable {
 
   public var observeTables: [String]
 

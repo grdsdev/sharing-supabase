@@ -12,11 +12,11 @@ public struct FetchAll<Value: Decodable>: SupabaseKeyRequest {
   public var filter: (@Sendable (PostgrestFilterBuilder) -> PostgrestBuilder)?
 
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(FetchKeyID(rawValue: self))
+    hasher.combine(configuration)
   }
 
   public static func == (lhs: Self, rhs: Self) -> Bool {
-    FetchKeyID(rawValue: lhs) == FetchKeyID(rawValue: rhs)
+    lhs.configuration == rhs.configuration
   }
 
   public init(
